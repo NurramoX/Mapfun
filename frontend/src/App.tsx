@@ -1,7 +1,7 @@
 import "./App.css"
 import { useState, useEffect } from 'react';
 import DeckGL from '@deck.gl/react/typed';
-import { ScatterplotLayer } from '@deck.gl/layers/typed';
+import { ScatterplotLayer, LineLayer } from '@deck.gl/layers/typed';
 import Map from 'react-map-gl/maplibre';
 
 // Define your initial view state
@@ -22,8 +22,17 @@ type MeterDto = {
     type: string
 }
 
+type LineDto = {
+    feeder_id: number,
+    line: {
+        coordinates: number[][] // Assuming it's an array of coordinate pairs
+    }
+}
+
+
 function App() {
     const [meters, setMeters] = useState([]);
+    const [lines, setLines] = useState([]);
 
     // Define a color map for feeder IDs
     const feederColorMap: Record<number, [number, number, number, number]> = {
@@ -45,9 +54,33 @@ function App() {
                 setMeters(formattedData);
             })
             .catch(error => console.error('Error fetching data:', error));
+
+        // Fetch line data
+        fetch('/api/connections')
+            .then(response => response.json())
+            .then(data => {
+                // Process and set line data
+                const formattedLines = data.map((item: LineDto) => ({
+                    to: item.line.coordinates[0],
+                    from: item.line.coordinates[1],
+                    feeder_id: item.feeder_id
+                }));
+                console.log(formattedLines);
+                setLines(formattedLines);
+            })
+            .catch(error => console.error('Error fetching line data:', error));
     }, []);
 
     const layers = [
+        new LineLayer({
+            id: 'line-layer',
+            data: lines,
+            getWidth: 5, // Adjust as needed
+            getColor: d => feederColorMap[d.feeder_id], // Default color
+            getSourcePosition: d => d.from,
+            getTargetPosition: d => d.to,
+            pickable: true,
+        }),
         new ScatterplotLayer({
             id: 'scatterplot-layer',
             data: meters,
@@ -62,12 +95,8 @@ function App() {
     return (
         <DeckGL
             initialViewState={INITIAL_VIEW_STATE}
-            controller={{
-                scrollZoom: {
-                    smooth: true,
-                    speed: 0.1
-            }}}
             layers={layers}
+            controller={true}
             getTooltip={({object}) => object && `Id: ${object.id}\nFeeder ${object.feeder_id}`}
         >
             <Map mapStyle={"http://localhost:8070/styles/light/style.json"} />
