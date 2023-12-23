@@ -30,6 +30,26 @@ class Meter(db.Model):
         }
 
 
+class LineGeometry(db.Model):
+    __tablename__ = 'view_line_geometries'
+
+    id = db.Column(db.Integer, primary_key=True)  # Artificial primary key
+    feeder_id = db.Column(db.Integer)
+    line = db.Column(Geometry('LINESTRING', srid=4326))
+
+    def to_dict(self):
+        return {
+            'feeder_id': self.feeder_id,
+            'line': json.loads(db.session.scalar(self.line.ST_AsGeoJSON())) if self.line else None
+        }
+
+
+@app.route('/connections', methods=['GET'])
+def get_connection():
+    lines = LineGeometry.query.all()
+    return jsonify([line.to_dict() for line in lines])
+
+
 @app.route('/meters', methods=['GET'])
 def get_meters():
     meters = Meter.query.all()
